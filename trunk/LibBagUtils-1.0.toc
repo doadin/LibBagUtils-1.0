@@ -1,0 +1,12 @@
+﻿## Title: Lib: LibBagUtils-1.0
+## Notes: Bag and item management utilities
+## Author: Mikk
+## X-eMail: dpsgnome@mail.com
+## Interface: 30000
+## Version: 1.0
+
+## X-Website: http://www.wowace.com/projects/libbagutils-1-0/
+## X-Category: Library
+
+LibStub.lua
+LibBagUtils-1.0\LibBagUtils-1.0.xml
