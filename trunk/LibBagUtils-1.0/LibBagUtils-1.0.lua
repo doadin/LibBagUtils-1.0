@@ -1,4 +1,4 @@
-local MAJOR,MINOR = "LibBagUtils-1.0",1
+local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision$"):match("%d+"))
 local lib = LibStub:NewLibrary(MAJOR,MINOR)
 
 --
@@ -25,10 +25,11 @@ local bags={
 	["BANK"] = {},
 	["BAGSBANK"] = {},
 }
-local bagsChanged = true	-- time to call updateBags()!
+local bagsChangedProcessed = 0
+local bagsChanged = 1  -- time to call updateBags()!
 
-lib.frame = lib.frame or CreateFrame("frame", nil, string.gsub(MAJOR,"[^%w]", "_").."_Frame")
-lib.frame:SetScript("OnEvent", function() bagsChanged=true end)
+lib.frame = lib.frame or CreateFrame("frame", string.gsub(MAJOR,"[^%w]", "_").."_Frame")
+lib.frame:SetScript("OnEvent", function() bagsChanged=bagsChanged+1 end)
 
 lib.frame:RegisterEvent("BAG_CLOSED")	-- happens when bags are shuffled around, also bank bags
 lib.frame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")  -- only really necessary when shopping new slots
@@ -39,7 +40,16 @@ lib.frame:RegisterEvent("BANKFRAME_CLOSED")	-- ... remove em again!
 -----------------------------------------------------------------------
 -- General-purpose utilities:
 
-local function print(msg) 
+local t = {}
+local function print(...) 
+   if select("#",...)>1 then
+      for k=1,select("#",...) do
+         t[k]=tostring(select(k,...))
+      end
+      msg = table.concat(t, " ", 1, select("#",...))
+   else
+      msg = ...
+   end
 	msg = gsub(msg, "\124", "\\124");
 	(SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME):AddMessage("LibBagUtils: "..msg)
 end
@@ -65,8 +75,41 @@ end
 
 
 -----------------------------------------------------------------------
+-- makeLinkPattern()
+-- Take an itemnumber, name, itemstring, or full link, and create a Lua pattern that can be ran against full itemlinks
+
+local function makeLinkPattern(lookingfor)
+	if type(lookingfor)=="number" then
+		-- "item:-12345" -> "item:%-12345[:|]"
+		return "|Hitem:"..escapePatterns(lookingfor).."[:|]"	
+	
+	elseif type(lookingfor)=="string" then
+	
+		if strmatch(lookingfor, "^item:") or strmatch(lookingfor, "|H") then	
+			-- (convert to itemstring) and ensure there's no level info in it
+			local str = strmatch(lookingfor, "(item:.-:.-:.-:.-:.-:.-:.-:.-)[:|]")
+			if not str then
+				str = strmatch(lookingfor, "(item:[-0-9:]+)")
+			end
+			if not str then
+				error(MAJOR..": '"..tostring(lookingfor).."' does not appear to be a valid itemstring / itemlink", 2)
+			end
+			return "|H" .. escapePatterns(str) .. "[:|]"
+			
+		else	-- put "|h[" and "]|h" around a name
+			return "|h%["..escapePatterns(lookingfor).."%]|h"
+		end
+	end
+	
+	error("makeLinkPattern(): Expected number or string", 1)
+end
+
+
+
+
+-----------------------------------------------------------------------
 -- updateBags()
--- Updates the contents of the bags[] arrays, and set bagsChanged to false
+-- Updates the contents of the bags[] arrays, and set bagsChangedProcessed = bagsChanged
 
 local function updateBags()
 	-- Update the contents of bags["BAGS"], bags["BANK"], etc
@@ -88,8 +131,10 @@ local function updateBags()
 		end
 	end
 	
-	-- Keyring
-	bags.BAGS[nBags+1]=KEYRING_CONTAINER; nBags=nBags+1
+	-- Keyring (if it exists)
+	if select(2, GetContainerNumFreeSlots(KEYRING_CONTAINER)) then
+		bags.BAGS[nBags+1]=KEYRING_CONTAINER; nBags=nBags+1
+	end
 
 	-- Backpack
 	bags.BAGS[nBags+1]=BACKPACK_CONTAINER; nBags=nBags+1
@@ -124,7 +169,28 @@ local function updateBags()
 	truncateArray(bags.BAGSBANK, nBagsBank)
 	
 	-- Declare bags up to date
-	bagsChanged = false
+	bagsChangedProcessed = bagsChanged
+end
+
+-----------------------------------------------------------------------
+-- Internal slot locking utilities - unfortunately slots where we just dropped an item arent considered locked by the API until the server processes it and returns a bag update event, so we consider them locked for 2 seconds ourselves
+
+lib.slotLocks = {}
+
+local GetTime = GetTime
+
+local function lockSlot(bag,slot)
+	local slots = lib.slotLocks[bag] or {}
+	if not lib.slotLocks[bag] then 
+		lib.slotLocks[bag] = slots
+	end
+	slots[slot] = GetTime()
+end
+
+local function isLocked(bag,slot)
+	local slots = lib.slotLocks[bag]
+	if not slots then return false end
+	return GetTime() - (slots[slot] or 0) < 2
 end
 
 
@@ -139,7 +205,7 @@ end
 --   for bag,slot,link in LBU:Iterate("BAGSBANK", 29434) do  -- find all badges of justice
 
 function lib:Iterate(which,lookingfor)
-	if bagsChanged then
+	if bagsChanged>bagsChangedProcessed then
 		updateBags()
 	end
 	
@@ -149,8 +215,9 @@ function lib:Iterate(which,lookingfor)
 	end
 	
 	local bagidx,slot,curbagsize=0,0,0
+	local bagsChangedAtStart = bagsChanged
 	local function iterator()
-		if bagsChanged then
+		if bagsChanged>bagsChangedAtStart then
 			print("Bags were changed during work. Aborting current operation.")	-- This should tell the user he fubard.
 			return nil
 		end
@@ -167,24 +234,13 @@ function lib:Iterate(which,lookingfor)
 		return baglist[bagidx],slot,GetContainerItemLink(baglist[bagidx],slot)
 	end
 	
-	if not lookingfor then
+	if lookingfor==nil then
 		return iterator
 	else
-		if type(lookingfor)=="number" then
-			lookingfor="|Hitem:"..escapePatterns(lookingfor).."[:|]"	-- "item:-12345" -> "item:%-12345[:|]"
-		elseif type(lookingfor)=="string" then
-			if strmatch(lookingfor, "^item:.*") then	-- terminate itemstring
-				lookingfor = "|H" .. escapePatterns(lookingfor) .. "[:|]"
-			elseif strmatch(lookingfor, "|H") then		-- as it were
-				lookingfor = escapePatterns(lookingfor)
-			else	-- put "|h[" and "]|h" around a name
-				lookingfor = "|h%["..escapePatterns(lookingfor).."%]|h"
-			end
-		end
+		lookingfor = makeLinkPattern(lookingfor)
 		return function()
 			for bag,slot in iterator do
-				local link=GetContainerItemLink(bag,slot)
-				if link and strmatch(GetContainerItemLink(bag,slot) or "", lookingfor) then
+				if strmatch(GetContainerItemLink(bag,slot) or "", lookingfor) then
 					return bag,slot,link
 				end
 			end
@@ -193,27 +249,43 @@ function lib:Iterate(which,lookingfor)
 	
 end
 
+
 -----------------------------------------------------------------------
--- API :FindSmallestStack("where", "lookingfor"[, notLocked])
+-- API :Find("where", "lookingfor", findLocked])
+
+function lib:Find(where,lookingfor,findLocked)
+	for bag,slot in lib:Iterate(where,lookingfor) do
+		local _, itemCount, locked, _, _ = GetContainerItemInfo(bag,slot)
+		if findLocked or not locked then
+			return bag,slot
+		end
+	end
+end
+
+
+-----------------------------------------------------------------------
+-- API :FindSmallestStack("where", "lookingfor"[, findLocked])
 --
 -- where       - string: "BAGS", "BANK", "BAGSBANK"
 -- lookingfor  - itemLink, itemName, itemString or itemId(number)
--- notLocked   - OPTIONAL: if true, will NOT return locked slots
+-- findLocked   - OPTIONAL: if true, will also return locked slots
 --
 -- Returns:  bag,slot,size    or nil on failure
 
-function lib:FindSmallestStack(where,lookingfor,notLocked)
-	local lockedIsOk = not notLocked
+function lib:FindSmallestStack(where,lookingfor,findLocked)
 	local smallest=9e9
 	local smbag,smslot
 	for bag,slot in lib:Iterate(where,lookingfor) do
 		local _, itemCount, locked, _, _ = GetContainerItemInfo(bag,slot)
-		if itemCount<smallest and (lockedIsOk or not locked) then
+		if itemCount<smallest and (findLocked or not locked) then
 			smbag=bag
 			smslot=slot
+			smallest=itemCount
 		end
 	end
-	return smbag,smslot,smallest	-- will be nil if none was found
+	if smbag then
+		return smbag,smslot,smallest
+	end
 end
 
 
@@ -224,13 +296,13 @@ end
 -- (considering specialty bags, already-existing stacks..)
 --
 -- where           - string: "BAGS", "BANK", "BAGSBANK"
--- dontClearOnFail - OPTIONAL: boolean: If the put operation fails due to no room, do NOT clear the cursor. (Note that some other wow client errors WILL clear the cursor)
 -- count           - OPTIONAL: number: if given, PutItem() will attempt to stack the item on top of another suitable stack. This is not possible without knowing the count.
+-- dontClearOnFail - OPTIONAL: boolean: If the put operation fails due to no room, do NOT clear the cursor. (Note that some other wow client errors WILL clear the cursor)
 --
 -- Returns:  bag,slot    or false for out-of-room
 --           0,0 will be returned if the function is called without an item in the cursor
 
-function lib:PutItem(where, dontClearOnFail, count)
+function lib:PutItem(where, count, dontClearOnFail)
 	if bagsChanged then
 		updateBags()
 	end
@@ -255,15 +327,20 @@ function lib:PutItem(where, dontClearOnFail, count)
 				local _, ciCount, ciLocked, _, _ = GetContainerItemInfo(bag,slot)
 				if ciLocked then
 					-- nope!
+				elseif isLocked(bag,slot) then
+					-- nope!
 				elseif ciCount+count<=itemStackCount and ciCount>bestsize then
 					bestsize=ciCount
-					bestbag=bestbag
-					bestslot=bestslot
+					bestbag=bag
+					bestslot=slot
 				end
 			end
 			if bestbag then	-- Place it!
 				PickupContainerItem(bestbag,bestslot)
 				if not CursorHasItem() then	-- success!
+					
+					lockSlot(bestbag,bestslot)
+					local _, ciCount, ciLocked, _, _ = GetContainerItemInfo(bestbag,bestslot)
 					return bestbag,bestslot
 				end
 				-- if we got here, the item couldn't be placed on top of the other for some reason, possibly because our assumption about equal itemids being wrong
@@ -281,13 +358,15 @@ function lib:PutItem(where, dontClearOnFail, count)
 	
 	for _,bag in ipairs(baglist) do
 		local bagFree, bagFam = GetContainerNumFreeSlots(bag)
+
 		if (bagFree or 0)<1 then
 			-- full
 		elseif bagFam==0 or bit.band(itemFam,bagFam)~=0 then	-- compatible bag!
 			for slot=1,GetContainerNumSlots(bag) do
-				if not GetContainerItemInfo(bag,slot) then	-- empty!
+				if (not GetContainerItemInfo(bag,slot)) and (not isLocked(bag,slot)) then	-- empty!
 					PickupContainerItem(bag,slot)
 					if not CursorHasItem() then -- success!
+						lockSlot(bag,slot)
 						return bag,slot
 					end
 					-- If we get here, something is probably severely broken. But we keep looping hoping for the best.
@@ -304,3 +383,12 @@ end
 
 
 
+-----------------------------------------------------------------------
+-- API :LinkIsItem(fullLink, lookingfor)
+-- 
+-- See if "lookingfor" equals the full link given. "lookingfor" can be any kind of item identifier.
+-- Level information is always ignored.
+
+function lib:LinkIsItem(fullLink, lookingfor)
+	return strmatch(fullLink, makeLinkPattern(lookingfor))
+end
