@@ -370,6 +370,7 @@ function lib:PutItem(where, count, dontClearOnFail)
 						return bag,slot
 					end
 					-- If we get here, something is probably severely broken. But we keep looping hoping for the best.
+					print("Odd. Couldn't place",count or "",itemLink,"in slot",bag,slot)
 				end
 			end
 		end
