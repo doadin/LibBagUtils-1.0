@@ -8,6 +8,8 @@ local lib = LibStub:NewLibrary(MAJOR,MINOR)
 --   :PutItem()
 --   :Iterate()
 --   :FindSmallestStack()
+--   :LinkIsItem() - which amongst other things handles the 3.2 wotlk randomstat item madness (changing while in AH/mail/gbank)
+--   .. and more!
 --
 -- Read the well-commented "API" function headers for each function below for usage and descriptions.
 --
@@ -55,7 +57,7 @@ local function print(...)
 end
 
 local function escapePatterns(str)
-	return gsub(str, "([-.?*%%%[%]])", "%%%1")
+	return ( gsub(str, "([-+.?*%%%[%]%(%)])", "%%%1") )
 end
 
 local function truncateArray(array, newLength)
@@ -75,33 +77,55 @@ end
 
 
 -----------------------------------------------------------------------
--- makeLinkPattern()
--- Take an itemnumber, name, itemstring, or full link, and create a Lua pattern that can be ran against full itemlinks
+-- makeLinkComparator()
+-- Take an itemnumber, name, itemstring, or full link, and return a (funcref,arg2,arg3) tuple that can be used to test against several itemlinks
 
-local function makeLinkPattern(lookingfor)
+local floor=math.floor
+local function compareFuzzySuffix(link, pattern, uniq16)
+	local uniq = strmatch(link, pattern)
+	if not uniq then	-- first 8 params didn't match
+		return false
+	end
+	return floor(tonumber(uniq)/65536)==uniq16
+end
+
+local function makeLinkComparator(lookingfor)
 	if type(lookingfor)=="number" then
 		-- "item:-12345" -> "item:%-12345[:|]"
-		return "|Hitem:"..escapePatterns(lookingfor).."[:|]"	
+		return strmatch, "|Hitem:"..escapePatterns(lookingfor).."[:|]",nil
 	
 	elseif type(lookingfor)=="string" then
 	
 		if strmatch(lookingfor, "^item:") or strmatch(lookingfor, "|H") then	
-			-- (convert to itemstring) and ensure there's no level info in it
+			-- (convert to itemstring) and ensure there's no level info in it (9th param)
 			local str = strmatch(lookingfor, "(item:.-:.-:.-:.-:.-:.-:.-:.-)[:|]")
 			if not str then
 				str = strmatch(lookingfor, "(item:[-0-9:]+)")
+			else
+				-- hokay, we have an itemstring. now we need to check for wobbly suffix factors thanks to 3.2 madness
+				-- see http://www.wowwiki.com/ItemString#3.2_wotlk_randomstat_items_changing_their_suffix_factors
+				local firsteight,uniq = strmatch(str, "(item:.-:.-:.-:.-:.-:.-:%-.-:)([-0-9]+)")
+				--                                                                      ^^ note leading "-"
+				if uniq then                                                 
+					-- suffix was negative, so suffix factors can wobble (really only with wotlk items, not BC ones, but meh)
+					return compareFuzzySuffix, 
+						"|H"..escapePatterns(firsteight).."([-0-9]+)[:|]", 
+						floor(tonumber(uniq)/65536)
+				else
+					-- unwobbly item, we're done, fall through
+				end
 			end
 			if not str then
-				error(MAJOR..": '"..tostring(lookingfor).."' does not appear to be a valid itemstring / itemlink", 2)
+				error(MAJOR..": MakeLinkComparator(): '"..tostring(lookingfor).."' does not appear to be a valid itemstring / itemlink", 3)
 			end
-			return "|H" .. escapePatterns(str) .. "[:|]"
+			return strmatch, "|H" .. escapePatterns(str) .. "[:|]",nil
 			
 		else	-- put "|h[" and "]|h" around a name
-			return "|h%["..escapePatterns(lookingfor).."%]|h"
+			return strmatch, "|h%["..escapePatterns(lookingfor).."%]|h",nil
 		end
 	end
 	
-	error("makeLinkPattern(): Expected number or string", 1)
+	error(MAJOR..": MakeLinkComparator(): Expected number or string", 3)
 end
 
 
@@ -194,6 +218,31 @@ local function isLocked(bag,slot)
 end
 
 
+
+
+-----------------------------------------------------------------------
+-- API :MakeLinkComparator("itemstring" or "itemLink" or "itemName" or itemId)
+--
+-- Returns a comparator function and two arguments, that can be used to
+-- rapidly compare several itemlinks to a set search pattern.
+--
+-- This comparator will
+--   1) Ignore the 9th "level" parameter introduced in 3.0
+--   2) Correctly match items with changing stats in inventory vs AH/Mail/GBank
+--      see http://www.wowwiki.com/ItemString#3.2_wotlk_randomstat_items_changing_their_suffix_factors--
+--   3) Pick the smartest way to compare available
+--
+-- local comparator,arg1,arg2 = LBU:MakeLinkComparator(myItemString)
+-- for _,itemLink in pairs(myItems) do
+--   if comparator(itemLink, arg1,arg2) then
+--     print(itemLink, "matches", myItemString)
+--
+
+function lib:MakeLinkComparator(lookingfor)
+	return makeLinkComparator(lookingfor)
+end
+
+
 -----------------------------------------------------------------------
 -- API :Iterate("which"[, "lookingfor"])
 -- 
@@ -237,10 +286,10 @@ function lib:Iterate(which,lookingfor)
 	if lookingfor==nil then
 		return iterator
 	else
-		lookingfor = makeLinkPattern(lookingfor)
+		local comparator,arg1,arg2 = makeLinkComparator(lookingfor)
 		return function()
 			for bag,slot in iterator do
-				if strmatch(GetContainerItemLink(bag,slot) or "", lookingfor) then
+				if comparator(GetContainerItemLink(bag,slot) or "", arg1,arg2) then
 					return bag,slot,link
 				end
 			end
@@ -388,8 +437,9 @@ end
 -- API :LinkIsItem(fullLink, lookingfor)
 -- 
 -- See if "lookingfor" equals the full link given. "lookingfor" can be any kind of item identifier.
--- Level information is always ignored.
+-- Level information is always ignored. Wobbly 3.2 randomstats are compensated for.
 
 function lib:LinkIsItem(fullLink, lookingfor)
-	return strmatch(fullLink, makeLinkPattern(lookingfor))
+	local comparator,arg1,arg2 = makeLinkComparator(lookingfor)
+	return comparator(fullLink, arg1,arg2)
 end
