@@ -7,9 +7,13 @@ local lib = LibStub:NewLibrary(MAJOR,MINOR)
 -- Several useful bag related APIs that you wish were built into the WoW API:
 --   :PutItem()
 --   :Iterate()
---   :FindSmallestStack()
 --   :LinkIsItem() - which amongst other things handles the 3.2 wotlk randomstat item madness (changing while in AH/mail/gbank)
+--   :GetNumFreeSlots()
 --   .. and more!
+--
+-- Pains have been taken to make sure to use as much FrameXML data and constants as possible,
+-- which should let the library (and dependant addons) keep functioning if Blizzard desides
+-- to add more bags, or reorder them.
 --
 -- Read the well-commented "API" function headers for each function below for usage and descriptions.
 --
@@ -20,8 +24,9 @@ if not lib then return end -- no upgrade needed
 
 local strmatch=string.match
 local gsub=string.gsub
+local band=bit.band
 
--- This array contains all known bags, sorted with specialty bags first
+-- These arrays contain all known bags, sorted with specialty bags first
 local bags={
 	["BAGS"] = {},
 	["BANK"] = {},
@@ -147,7 +152,8 @@ local function updateBags()
 			bags.BAGS[nBags+1]=i; nBags=nBags+1
 		end
 	end
-	
+
+	-- Now add nonspecial bags
 	for i=NUM_BAG_SLOTS+1,NUM_BAG_SLOTS+NUM_BANKBAGSLOTS do
 		local free,fam = GetContainerNumFreeSlots(i)
 		if fam and fam~=0 then
@@ -168,7 +174,7 @@ local function updateBags()
 		bags.BANK[nBank+1]=BANK_CONTAINER; nBank=nBank+1
 	end
 	
-	-- Now add nonspecial bags
+	-- Add bank special bags
 	for i=1,NUM_BAG_SLOTS do
 		local free,fam = GetContainerNumFreeSlots(i)
 		if fam and fam==0 then
@@ -176,6 +182,7 @@ local function updateBags()
 		end
 	end
 	
+	-- Add bank normal bags
 	for i=NUM_BAG_SLOTS+1,NUM_BAG_SLOTS+NUM_BANKBAGSLOTS do
 		local free,fam = GetContainerNumFreeSlots(i)
 		if fam and fam==0 then
@@ -243,6 +250,70 @@ function lib:MakeLinkComparator(lookingfor)
 end
 
 
+
+-----------------------------------------------------------------------
+-- API :IterateBags("which", itemFamily)
+--
+-- which       - string: "BAGS", "BANK", "BAGSBANK"
+-- itemFamily  - number: bitmasked itemFamily; will accept combinations
+--                       0: will only iterate regular bags
+--               nil: will iterate all bags (including keyring, and possibly feature special bags!)
+--
+-- Returns an iterator that can be used in a for loop, e.g.:
+--   for bag in LBU:IterateBags("BANK") do  -- loop all bank bags (including bankframe)
+
+function lib:IterateBags(which, itemFamily)
+	if bagsChanged>bagsChangedProcessed then
+		updateBags()
+	end
+	local baglist=bags[which]
+	if not baglist then
+		error([[Usage: LibBagUtils:IterateBags("which"[, itemFamily])]], 2)
+	end
+	local i=0
+	if not itemFamily then
+		return function()
+			i=i+1
+			return baglist[i]
+		end
+	else
+		return function()
+			i=i+1
+			while baglist[i] do
+				local _,bagFamily = GetContainerNumFreeSlots(baglist[i])
+				if itemFamily==0 then
+					if bagFamily==0 then
+						return baglist[i]
+					end
+				elseif band(itemFamily,bagFamily)~=0 then
+					return baglist[i]
+				end
+				i=i+1
+			end	
+		end
+	end
+end
+
+
+-----------------------------------------------------------------------
+-- API: CountSlots(which, itemFamily)
+--
+-- which       - string: "BAGS", "BANK", "BAGSBANK"
+-- itemFamily  - bitmasked itemFamily; see :IterateBags
+--
+-- Returns: numFreeSlots, numTotalSlots
+--          BANK is considered to have 0 slots if bank window is not open
+
+function lib:CountSlots(which, itemFamily)
+	local free,tot=0,0
+	for bag in lib:IterateBags(which, itemFamily) do
+		free = free + GetContainerNumFreeSlots(bag)
+		tot = tot + GetContainerNumSlots(bag)
+	end
+	return free,tot
+end
+
+
 -----------------------------------------------------------------------
 -- API :Iterate("which"[, "lookingfor"])
 -- 
@@ -253,14 +324,14 @@ end
 --   for bag,slot,link in LBU:Iterate("BAGS") do   -- loop all slots
 --   for bag,slot,link in LBU:Iterate("BAGSBANK", 29434) do  -- find all badges of justice
 
-function lib:Iterate(which,lookingfor)
+function lib:Iterate(which, lookingfor)
 	if bagsChanged>bagsChangedProcessed then
 		updateBags()
 	end
 	
 	local baglist=bags[which]
 	if not baglist  then
-		error([[Usage: LibBagUtils:Iterate(which [, itemid or itemlink])]], 2)
+		error([[Usage: LibBagUtils:Iterate(which [, item])]], 2)
 	end
 	
 	local bagidx,slot,curbagsize=0,0,0
@@ -301,12 +372,18 @@ end
 
 -----------------------------------------------------------------------
 -- API :Find("where", "lookingfor", findLocked])
+--
+-- where       - string: "BAGS", "BANK", "BAGSBANK"
+-- lookingfor  - itemLink, itemName, itemString or itemId(number)
+-- findLocked   - OPTIONAL: if true, will also return locked slots
+--
+-- Returns:  bag,slot,link    or nil on failure
 
 function lib:Find(where,lookingfor,findLocked)
 	for bag,slot in lib:Iterate(where,lookingfor) do
 		local _, itemCount, locked, _, _ = GetContainerItemInfo(bag,slot)
 		if findLocked or not locked then
-			return bag,slot
+			return bag,slot,GetContainerItemLink(bag,slot)
 		end
 	end
 end
