@@ -24,7 +24,11 @@ if not lib then return end -- no upgrade needed
 
 local strmatch=string.match
 local gsub=string.gsub
+local floor=math.floor
 local band=bit.band
+local select,type,next,tonumber,tostring=select,type,next,tonumber,tostring
+local GetTime=GetTime
+
 
 -- These arrays contain all known bags, sorted with specialty bags first
 local bags={
@@ -32,14 +36,16 @@ local bags={
 	["BANK"] = {},
 	["BAGSBANK"] = {},
 }
-local bagsChangedProcessed = 0
-local bagsChanged = 1  -- time to call updateBags()!
+
+local bagsChanged = 1  -- incremented every time bags are changed
+local bagsChangedProcessed = 0	-- copied in from bagsChanged every time we rescan the bags
+
 
 lib.frame = lib.frame or CreateFrame("frame", string.gsub(MAJOR,"[^%w]", "_").."_Frame")
 lib.frame:SetScript("OnEvent", function() bagsChanged=bagsChanged+1 end)
 
 lib.frame:RegisterEvent("BAG_CLOSED")	-- happens when bags are shuffled around, also bank bags
-lib.frame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")  -- only really necessary when shopping new slots
+lib.frame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")  -- only really necessary when shopping new slots (so do we even need it here?)
 lib.frame:RegisterEvent("BANKFRAME_OPENED")	-- time to add bank bags to the list
 lib.frame:RegisterEvent("BANKFRAME_CLOSED")	-- ... remove em again!
 
@@ -276,16 +282,23 @@ function lib:IterateBags(which, itemFamily)
 			i=i+1
 			return baglist[i]
 		end
+	elseif itemFamily==0 then
+		return function()
+			i=i+1
+			while baglist[i] do
+				local _,bagFamily = GetContainerNumFreeSlots(baglist[i])
+				if bagFamily and bagFamily==0 then
+					return baglist[i]
+				end
+				i=i+1
+			end	
+		end
 	else
 		return function()
 			i=i+1
 			while baglist[i] do
 				local _,bagFamily = GetContainerNumFreeSlots(baglist[i])
-				if itemFamily==0 then
-					if bagFamily==0 then
-						return baglist[i]
-					end
-				elseif band(itemFamily,bagFamily)~=0 then
+				if bagFamily and band(itemFamily,bagFamily)~=0 then
 					return baglist[i]
 				end
 				i=i+1
@@ -305,14 +318,54 @@ end
 --          BANK is considered to have 0 slots if bank window is not open
 
 function lib:CountSlots(which, itemFamily)
+	if bagsChanged>bagsChangedProcessed then
+		updateBags()
+	end
+	local baglist=bags[which]
+	if not baglist then
+		error([[Usage: LibBagUtils:IterateBags("which"[, itemFamily])]], 2)
+	end
+	
+	
 	local free,tot=0,0
-	for bag in lib:IterateBags(which, itemFamily) do
-		free = free + GetContainerNumFreeSlots(bag)
-		tot = tot + GetContainerNumSlots(bag)
+
+	if not itemFamily then
+		for _,bag in ipairs(baglist) do
+			free = free + GetContainerNumFreeSlots(bag)
+			tot = tot + GetContainerNumSlots(bag)
+		end
+	elseif itemFamily==0 then
+		for _,bag in ipairs(baglist) do
+			local f,bagFamily = GetContainerNumFreeSlots(bag)
+			if bagFamily and bagFamily==0 then
+				free = free + f
+				tot = tot + GetContainerNumSlots(bag)
+			end
+		end
+	else
+		for _,bag in ipairs(baglist) do
+			local f,bagFamily = GetContainerNumFreeSlots(bag)
+			if bagFamily and band(itemFamily,bagFamily)~=0 then
+				free = free + f
+				tot = tot + GetContainerNumSlots(bag)
+			end
+		end
 	end
 	return free,tot
 end
 
+
+-----------------------------------------------------------------------
+-- API :IsBank(bag)
+--
+-- bag        - number: bag number
+--
+-- Returns true if the given bag is a bank bag
+
+function lib:IsBank(bag)
+	return bag==BANK_CONTAINER or
+		(bag>=NUM_BAG_SLOTS+1 and bag<=NUM_BAG_SLOTS+NUM_BANKBAGSLOTS)
+end
 
 -----------------------------------------------------------------------
 -- API :Iterate("which"[, "lookingfor"])
