@@ -49,6 +49,9 @@ lib.frame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")  -- only really necessary whe
 lib.frame:RegisterEvent("BANKFRAME_OPENED")	-- time to add bank bags to the list
 lib.frame:RegisterEvent("BANKFRAME_CLOSED")	-- ... remove em again!
 
+local isLoggedIn = false
+lib.frame:SetScript("OnUpdate", function() isLoggedIn = true; lib.frame:Hide() end)
+lib.frame:Show()
 
 -----------------------------------------------------------------------
 -- General-purpose utilities:
@@ -206,7 +209,12 @@ local function updateBags()
 	truncateArray(bags.BAGSBANK, nBagsBank)
 	
 	-- Declare bags up to date
-	bagsChangedProcessed = bagsChanged
+	if isLoggedIn then
+		-- We can't do this during startup. 
+		-- BAG_UPDATE fires once for every bag AS IT IS LOADED.
+		-- If an addon reacts to this and talks to LibBagUtils, we would declare bags "up to date" too soon.
+		bagsChangedProcessed = bagsChanged
+	end
 end
 
 -----------------------------------------------------------------------
