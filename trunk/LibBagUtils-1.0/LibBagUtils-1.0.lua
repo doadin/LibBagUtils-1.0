@@ -28,30 +28,17 @@ local floor=math.floor
 local band=bit.band
 local select,type,next,tonumber,tostring=select,type,next,tonumber,tostring
 local GetTime=GetTime
+local GetContainerNumSlots, GetContainerNumFreeSlots = GetContainerNumSlots, GetContainerNumFreeSlots
+local GetContainerItemLink = GetContainerItemLink
+local GetItemInfo, GetItemFamily = GetItemInfo, GetItemFamily
 
 
--- These arrays contain all known bags, sorted with specialty bags first
-local bags={
-	["BAGS"] = {},
-	["BANK"] = {},
-	["BAGSBANK"] = {},
-}
 
-local bagsChanged = 1  -- incremented every time bags are changed
-local bagsChangedProcessed = 0	-- copied in from bagsChanged every time we rescan the bags
-
-
-lib.frame = lib.frame or CreateFrame("frame", string.gsub(MAJOR,"[^%w]", "_").."_Frame")
-lib.frame:SetScript("OnEvent", function() bagsChanged=bagsChanged+1 end)
-
-lib.frame:RegisterEvent("BAG_CLOSED")	-- happens when bags are shuffled around, also bank bags
-lib.frame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")  -- only really necessary when shopping new slots (so do we even need it here?)
-lib.frame:RegisterEvent("BANKFRAME_OPENED")	-- time to add bank bags to the list
-lib.frame:RegisterEvent("BANKFRAME_CLOSED")	-- ... remove em again!
-
-local isLoggedIn = false
-lib.frame:SetScript("OnUpdate", function() isLoggedIn = true; lib.frame:Hide() end)
-lib.frame:Show()
+-- no longer used: lib.frame = lib.frame or CreateFrame("frame", string.gsub(MAJOR,"[^%w]", "_").."_Frame")
+if lib.frame then
+	lib.frame:Hide()
+	lib.frame:UnregisterAllEvents()
+end
 
 -----------------------------------------------------------------------
 -- General-purpose utilities:
@@ -74,20 +61,6 @@ local function escapePatterns(str)
 	return ( gsub(str, "([-+.?*%%%[%]%(%)])", "%%%1") )
 end
 
-local function truncateArray(array, newLength)
-	for i=#array, newLength+1, -1 do
-		array[i]=nil
-	end
-end
-
-local function appendArray(dst, src, at)
-	local n=at or #dst
-	for i=1,#src do
-		n=n+1
-		dst[n]=src[i]
-	end
-	return n
-end
 
 
 -----------------------------------------------------------------------
@@ -119,7 +92,7 @@ local function makeLinkComparator(lookingfor)
 				-- hokay, we have an itemstring. now we need to check for wobbly suffix factors thanks to 3.2 madness
 				-- see http://www.wowwiki.com/ItemString#3.2_wotlk_randomstat_items_changing_their_suffix_factors
 				local firsteight,uniq = strmatch(str, "(item:.-:.-:.-:.-:.-:.-:%-.-:)([-0-9]+)")
-				--                                                                      ^^ note leading "-"
+
 				if uniq then                                                 
 					-- suffix was negative, so suffix factors can wobble (really only with wotlk items, not BC ones, but meh)
 					return compareFuzzySuffix, 
@@ -145,77 +118,7 @@ end
 
 
 
------------------------------------------------------------------------
--- updateBags()
--- Updates the contents of the bags[] arrays, and set bagsChangedProcessed = bagsChanged
 
-local function updateBags()
-	-- Update the contents of bags["BAGS"], bags["BANK"], etc
-	-- Create the arrays so that specialty bags are FIRST in the list
-	local nBags,nBank,nBagsBank=0,0,0
-
-	-- First add special bags
-	for i=1,NUM_BAG_SLOTS do
-		local free,fam = GetContainerNumFreeSlots(i)
-		if fam and fam~=0 then
-			bags.BAGS[nBags+1]=i; nBags=nBags+1
-		end
-	end
-
-	-- Now add nonspecial bags
-	for i=NUM_BAG_SLOTS+1,NUM_BAG_SLOTS+NUM_BANKBAGSLOTS do
-		local free,fam = GetContainerNumFreeSlots(i)
-		if fam and fam~=0 then
-			bags.BANK[nBank+1]=i; nBank=nBank+1
-		end
-	end
-	
-	-- Keyring (if it exists)
-	if select(2, GetContainerNumFreeSlots(KEYRING_CONTAINER)) then
-		bags.BAGS[nBags+1]=KEYRING_CONTAINER; nBags=nBags+1
-	end
-
-	-- Backpack
-	bags.BAGS[nBags+1]=BACKPACK_CONTAINER; nBags=nBags+1
-
-	-- Main bank frame
-	if select(2, GetContainerNumFreeSlots(BANK_CONTAINER)) then
-		bags.BANK[nBank+1]=BANK_CONTAINER; nBank=nBank+1
-	end
-	
-	-- Add bank special bags
-	for i=1,NUM_BAG_SLOTS do
-		local free,fam = GetContainerNumFreeSlots(i)
-		if fam and fam==0 then
-			bags.BAGS[nBags+1]=i; nBags=nBags+1
-		end
-	end
-	
-	-- Add bank normal bags
-	for i=NUM_BAG_SLOTS+1,NUM_BAG_SLOTS+NUM_BANKBAGSLOTS do
-		local free,fam = GetContainerNumFreeSlots(i)
-		if fam and fam==0 then
-			bags.BANK[nBank+1]=i; nBank=nBank+1
-		end
-	end
-	
-	-- Create the "BAGSBANK" array
-	nBagsBank = appendArray(bags.BAGSBANK, bags.BAGS, nBagsBank)
-	nBagsBank = appendArray(bags.BAGSBANK, bags.BANK, nBagsBank)
-
-	-- Delete leftovers at the end of the arrays
-	truncateArray(bags.BAGS, nBags)
-	truncateArray(bags.BANK, nBank)
-	truncateArray(bags.BAGSBANK, nBagsBank)
-	
-	-- Declare bags up to date
-	if isLoggedIn then
-		-- We can't do this during startup. 
-		-- BAG_UPDATE fires once for every bag AS IT IS LOADED.
-		-- If an addon reacts to this and talks to LibBagUtils, we would declare bags "up to date" too soon.
-		bagsChangedProcessed = bagsChanged
-	end
-end
 
 -----------------------------------------------------------------------
 -- Internal slot locking utilities - unfortunately slots where we just dropped an item arent considered locked by the API until the server processes it and returns a bag update event, so we consider them locked for 2 seconds ourselves
@@ -274,44 +177,79 @@ end
 --               nil: will iterate all bags (including keyring, and possibly feature special bags!)
 --
 -- Returns an iterator that can be used in a for loop, e.g.:
---   for bag in LBU:IterateBags("BANK") do  -- loop all bank bags (including bankframe)
+--   for bag in LBU:IterateBags("BAGS") do  -- loop all carried bags (including backpack & keyring)
+
+local bags = {
+	BAGS = {},
+	BANK = {},
+	BAGSBANK = {},
+}
+
+-- Carried bags
+for i=1,NUM_BAG_SLOTS do
+	bags.BAGS[i]=i
+end
+bags.BAGS[BACKPACK_CONTAINER]=BACKPACK_CONTAINER
+bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
+
+-- Bank bags
+for i=NUM_BAG_SLOTS+1,NUM_BAG_SLOTS+NUM_BANKBAGSLOTS do
+	bags.BANK[i]=i
+end
+bags.BANK[BANK_CONTAINER]=BANK_CONTAINER
+
+-- Both
+for k,v in pairs(bags.BAGS) do
+	bags.BAGSBANK[k]=v
+end
+for k,v in pairs(bags.BANK) do
+	bags.BAGSBANK[k]=v
+end
+
+local function iterbags(tab, cur)
+	cur = next(tab, cur)
+	while cur do
+		local free,fam = GetContainerNumFreeSlots(cur)
+		if fam then
+			return cur
+		end
+		cur = next(tab, cur)
+	end
+end
+
+local function iterbagsfam0(tab, cur)
+	cur = next(tab, cur)
+	while cur do
+		local free,fam = GetContainerNumFreeSlots(cur)
+		if fam==0 then
+			return cur
+		end
+		cur = next(tab, cur)
+	end
+end
 
 function lib:IterateBags(which, itemFamily)
-	if bagsChanged>bagsChangedProcessed then
-		updateBags()
-	end
+	
 	local baglist=bags[which]
 	if not baglist then
 		error([[Usage: LibBagUtils:IterateBags("which"[, itemFamily])]], 2)
 	end
-	local i=0
+	
 	if not itemFamily then
-		return function()
-			i=i+1
-			return baglist[i]
-		end
+		return iterbags, baglist
 	elseif itemFamily==0 then
-		return function()
-			i=i+1
-			while baglist[i] do
-				local _,bagFamily = GetContainerNumFreeSlots(baglist[i])
-				if bagFamily and bagFamily==0 then
-					return baglist[i]
-				end
-				i=i+1
-			end	
-		end
+		return iterbagsfam0, baglist
 	else
-		return function()
-			i=i+1
-			while baglist[i] do
-				local _,bagFamily = GetContainerNumFreeSlots(baglist[i])
-				if bagFamily and band(itemFamily,bagFamily)~=0 then
-					return baglist[i]
+		return function(tab, cur)
+			cur = next(tab, cur)
+			while cur do
+				local free,fam = GetContainerNumFreeSlots(cur)
+				if fam and band(itemFamily,fam)~=0 then
+					return cur
 				end
-				i=i+1
-			end	
-		end
+				cur = next(tab, cur)
+			end
+		end, baglist
 	end
 end
 
@@ -326,9 +264,6 @@ end
 --          BANK is considered to have 0 slots if bank window is not open
 
 function lib:CountSlots(which, itemFamily)
-	if bagsChanged>bagsChangedProcessed then
-		updateBags()
-	end
 	local baglist=bags[which]
 	if not baglist then
 		error([[Usage: LibBagUtils:IterateBags("which"[, itemFamily])]], 2)
@@ -338,20 +273,20 @@ function lib:CountSlots(which, itemFamily)
 	local free,tot=0,0
 
 	if not itemFamily then
-		for _,bag in ipairs(baglist) do
+		for bag in pairs(baglist) do
 			free = free + GetContainerNumFreeSlots(bag)
 			tot = tot + GetContainerNumSlots(bag)
 		end
 	elseif itemFamily==0 then
-		for _,bag in ipairs(baglist) do
+		for bag in pairs(baglist) do
 			local f,bagFamily = GetContainerNumFreeSlots(bag)
-			if bagFamily and bagFamily==0 then
+			if bagFamily==0 then
 				free = free + f
 				tot = tot + GetContainerNumSlots(bag)
 			end
 		end
 	else
-		for _,bag in ipairs(baglist) do
+		for bag in pairs(baglist) do
 			local f,bagFamily = GetContainerNumFreeSlots(bag)
 			if bagFamily and band(itemFamily,bagFamily)~=0 then
 				free = free + f
@@ -382,37 +317,27 @@ end
 -- lookingfor  - OPTIONAL: itemLink, itemName, itemString or itemId(number)
 --
 -- Returns an iterator that can be used in a for loop, e.g.:
---   for bag,slot,link in LBU:Iterate("BAGS") do   -- loop all slots
+--   for bag,slot,link in LBU:Iterate("BAGS") do   -- loop all slots in carried bags (including backpack & keyring)
 --   for bag,slot,link in LBU:Iterate("BAGSBANK", 29434) do  -- find all badges of justice
 
 function lib:Iterate(which, lookingfor)
-	if bagsChanged>bagsChangedProcessed then
-		updateBags()
-	end
 	
 	local baglist=bags[which]
-	if not baglist  then
+	if not baglist then
 		error([[Usage: LibBagUtils:Iterate(which [, item])]], 2)
 	end
 	
-	local bagidx,slot,curbagsize=0,0,0
-	local bagsChangedAtStart = bagsChanged
+	local bag,slot,curbagsize=nil,0,0
 	local function iterator()
-		if bagsChanged>bagsChangedAtStart then
-			print("Bags were changed during work. Aborting current operation.")	-- This should tell the user he fubard.
-			return nil
-		end
 		while slot>=curbagsize do
-			bagidx=bagidx+1
-			if not baglist[bagidx] then
-				return nil
-			end
-			curbagsize=GetContainerNumSlots(baglist[bagidx]) or 0
+			bag = iterbags(baglist, bag)
+			if not bag then return nil end
+			curbagsize=GetContainerNumSlots(bag) or 0
 			slot=0
 		end	
 		
 		slot=slot+1
-		return baglist[bagidx],slot,GetContainerItemLink(baglist[bagidx],slot)
+		return bag,slot,GetContainerItemLink(bag,slot)
 	end
 	
 	if lookingfor==nil then
@@ -420,8 +345,8 @@ function lib:Iterate(which, lookingfor)
 	else
 		local comparator,arg1,arg2 = makeLinkComparator(lookingfor)
 		return function()
-			for bag,slot in iterator do
-				if comparator(GetContainerItemLink(bag,slot) or "", arg1,arg2) then
+			for bag,slot,link in iterator do
+				if link and comparator(link, arg1,arg2) then
 					return bag,slot,link
 				end
 			end
@@ -441,10 +366,10 @@ end
 -- Returns:  bag,slot,link    or nil on failure
 
 function lib:Find(where,lookingfor,findLocked)
-	for bag,slot in lib:Iterate(where,lookingfor) do
+	for bag,slot,link in lib:Iterate(where,lookingfor) do
 		local _, itemCount, locked, _, _ = GetContainerItemInfo(bag,slot)
 		if findLocked or not locked then
-			return bag,slot,GetContainerItemLink(bag,slot)
+			return bag,slot,link
 		end
 	end
 end
@@ -490,10 +415,6 @@ end
 --           0,0 will be returned if the function is called without an item in the cursor
 
 function lib:PutItem(where, count, dontClearOnFail)
-	if bagsChanged then
-		updateBags()
-	end
-
 	local cursorType,itemId,itemLink = GetCursorInfo()
 	if cursorType~="item" then
 		geterrorhandler()(MAJOR..": PutItem(): There was no item in the cursor.")
@@ -543,22 +464,41 @@ function lib:PutItem(where, count, dontClearOnFail)
 		itemFam = 0	-- Ouch, it was a bag. Bags are always family 0 for purposes of trying to PUT them somewhere.
 	end
 	
-	for _,bag in ipairs(baglist) do
-		local bagFree, bagFam = GetContainerNumFreeSlots(bag)
-
-		if (bagFree or 0)<1 then
-			-- full
-		elseif bagFam==0 or bit.band(itemFam,bagFam)~=0 then	-- compatible bag!
-			for slot=1,GetContainerNumSlots(bag) do
-				if (not GetContainerItemInfo(bag,slot)) and (not isLocked(bag,slot)) then	-- empty!
-					PickupContainerItem(bag,slot)
-					if not CursorHasItem() then -- success!
-						lockSlot(bag,slot)
-						return bag,slot
-					end
-					-- If we get here, something is probably severely broken. But we keep looping hoping for the best.
-					print("Odd. Couldn't place",count or "",itemLink,"in slot",bag,slot)
+	local destbag
+	
+	-- If this is a specialty item, we try specialty bags first
+	if itemFam~=0 then
+		for bag in iterbags, baglist do
+			local bagFree, bagFam = GetContainerNumFreeSlots(bag)
+			if bagFam~=0 and bit.band(itemFam,bagFam)~=0 then
+				destbag = bag
+				break
+			end
+		end
+	end
+	
+	-- If we couldn't put it in a special bag, try normal bags
+	if not destbag then
+		for bag in iterbagsfam0, baglist do
+			if GetContainerNumFreeSlots(bag)>0 then
+				destbag=bag
+				break
+			end
+		end
+	end
+	
+	
+	-- So.. If we have a destination bag, plop it in a free slot in it!
+	if destbag then
+		for slot=1,GetContainerNumSlots(destbag) do
+			if (not GetContainerItemInfo(destbag,slot)) and (not isLocked(destbag,slot)) then	-- empty!
+				PickupContainerItem(destbag,slot)
+				if not CursorHasItem() then -- success!
+					lockSlot(destbag,slot)
+					return destbag,slot
 				end
+				-- If we get here, something is probably severely broken. But we keep looping hoping for the best.
+				print("Odd. Couldn't place",count or "",itemLink,"in bag",destbag,"slot",slot)
 			end
 		end
 	end
