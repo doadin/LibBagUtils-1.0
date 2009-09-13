@@ -143,6 +143,42 @@ end
 
 
 
+-----------------------------------------------------------------------
+-- Own family/freeslots handling to handle the goddamn keyring that doesn't behave like anything else
+
+local function GetContainerFamily(bag)
+	if bag==KEYRING_CONTAINER then
+		return 256
+	end
+	local free,fam = GetContainerNumFreeSlots(bag)
+	return fam
+end
+
+function lib:GetContainerFamily(bag)
+	return GetContainerFamily(bag)
+end
+
+
+local function myGetContainerNumFreeSlots(bag)
+	if bag==KEYRING_CONTAINER then
+		local free=0
+		for slot=1,GetContainerNumSlots(bag) do
+			if not GetContainerItemLink(bag,slot) then
+				free=free+1
+			end
+		end
+		return free,256
+	end
+	return GetContainerNumFreeSlots(bag)
+end
+
+function lib:GetContainerNumFreeSlots(bag)
+	return myGetContainerNumFreeSlots(bag)
+end
+
+
+
+
 
 -----------------------------------------------------------------------
 -- API :MakeLinkComparator("itemstring" or "itemLink" or "itemName" or itemId)
@@ -209,8 +245,7 @@ end
 local function iterbags(tab, cur)
 	cur = next(tab, cur)
 	while cur do
-		local free,fam = GetContainerNumFreeSlots(cur)
-		if fam then
+		if GetContainerFamily(cur) then
 			return cur
 		end
 		cur = next(tab, cur)
@@ -243,7 +278,7 @@ function lib:IterateBags(which, itemFamily)
 		return function(tab, cur)
 			cur = next(tab, cur)
 			while cur do
-				local free,fam = GetContainerNumFreeSlots(cur)
+				local fam = GetContainerFamily(cur)
 				if fam and band(itemFamily,fam)~=0 then
 					return cur
 				end
@@ -274,7 +309,7 @@ function lib:CountSlots(which, itemFamily)
 
 	if not itemFamily then
 		for bag in pairs(baglist) do
-			free = free + GetContainerNumFreeSlots(bag)
+			free = free + myGetContainerNumFreeSlots(bag)
 			tot = tot + GetContainerNumSlots(bag)
 		end
 	elseif itemFamily==0 then
@@ -287,7 +322,7 @@ function lib:CountSlots(which, itemFamily)
 		end
 	else
 		for bag in pairs(baglist) do
-			local f,bagFamily = GetContainerNumFreeSlots(bag)
+			local f,bagFamily = myGetContainerNumFreeSlots(bag)
 			if bagFamily and band(itemFamily,bagFamily)~=0 then
 				free = free + f
 				tot = tot + GetContainerNumSlots(bag)
@@ -469,7 +504,7 @@ function lib:PutItem(where, count, dontClearOnFail)
 	-- If this is a specialty item, we try specialty bags first
 	if itemFam~=0 then
 		for bag in iterbags, baglist do
-			local bagFree, bagFam = GetContainerNumFreeSlots(bag)
+			local bagFree, bagFam = myGetContainerNumFreeSlots(bag)
 			if bagFam~=0 and bit.band(itemFam,bagFam)~=0 then
 				destbag = bag
 				break
