@@ -4,6 +4,7 @@
 ## X-eMail: dpsgnome@mail.com
 ## Interface: 30200
 ## Version: 1.0.@project-revision@
+## LoadOnDemand: 1
 
 ## X-Website: http://www.wowace.com/projects/libbagutils-1-0/
 ## X-Category: Library

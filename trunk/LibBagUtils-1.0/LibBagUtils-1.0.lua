@@ -25,14 +25,21 @@ if not lib then return end -- no upgrade needed
 local strmatch=string.match
 local gsub=string.gsub
 local floor=math.floor
+local tconcat = table.concat
 local band=bit.band
-local select,type,next,tonumber,tostring=select,type,next,tonumber,tostring
+local pairs,select,type,next,tonumber,tostring=pairs,select,type,next,tonumber,tostring
 local GetTime=GetTime
 local GetContainerNumSlots, GetContainerNumFreeSlots = GetContainerNumSlots, GetContainerNumFreeSlots
-local GetContainerItemLink = GetContainerItemLink
+local GetContainerItemLink,GetContainerItemInfo = GetContainerItemLink,GetContainerItemInfo
 local GetItemInfo, GetItemFamily = GetItemInfo, GetItemFamily
+-- GLOBALS: error, geterrorhandler, PickupContainerItem
+-- GLOBALS: CursorHasItem, ClearCursor, GetCursorInfo
+-- GLOBALS: DEFAULT_CHAT_FRAME, SELECTED_CHAT_FRAME
 
-
+local BANK_CONTAINER = BANK_CONTAINER
+local KEYRING_CONTAINER = KEYRING_CONTAINER
+local NUM_BANKBAGSLOTS = NUM_BANKBAGSLOTS
+local NUM_BAG_SLOTS = NUM_BAG_SLOTS
 
 -- no longer used: lib.frame = lib.frame or CreateFrame("frame", string.gsub(MAJOR,"[^%w]", "_").."_Frame")
 if lib.frame then
@@ -45,16 +52,17 @@ end
 
 local t = {}
 local function print(...) 
+   local msg
    if select("#",...)>1 then
       for k=1,select("#",...) do
          t[k]=tostring(select(k,...))
       end
-      msg = table.concat(t, " ", 1, select("#",...))
+      msg = tconcat(t, " ", 1, select("#",...))
    else
       msg = ...
    end
 	msg = gsub(msg, "\124", "\\124");
-	(SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME):AddMessage("LibBagUtils: "..msg)
+	(SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME):AddMessage(MAJOR..": "..msg)
 end
 
 local function escapePatterns(str)
@@ -449,6 +457,19 @@ end
 -- Returns:  bag,slot    or false for out-of-room
 --           0,0 will be returned if the function is called without an item in the cursor
 
+local function putinbag(destbag)
+	for slot=1,GetContainerNumSlots(destbag) do
+		if (not GetContainerItemInfo(destbag,slot)) and (not isLocked(destbag,slot)) then	-- empty!
+			PickupContainerItem(destbag,slot)
+			if not CursorHasItem() then -- success!
+				lockSlot(destbag,slot)
+				return slot
+			end
+			-- If we get here, something is probably severely broken. But we keep looping hoping for the best.
+		end
+	end
+end
+
 function lib:PutItem(where, count, dontClearOnFail)
 	local cursorType,itemId,itemLink = GetCursorInfo()
 	if cursorType~="item" then
@@ -493,51 +514,37 @@ function lib:PutItem(where, count, dontClearOnFail)
 		end
 	end
 	
-	-- Put the item in the first empty slot that it CAN be put in!  (our bag list is sorted with specialty bags first!)
+	-- Put the item in the first empty slot that it CAN be put in!
 	local itemFam = GetItemFamily(itemLink)
 	if itemFam~=0 and select(9,GetItemInfo(itemLink))=="INVTYPE_BAG" then
 		itemFam = 0	-- Ouch, it was a bag. Bags are always family 0 for purposes of trying to PUT them somewhere.
 	end
 	
-	local destbag
-	
 	-- If this is a specialty item, we try specialty bags first
 	if itemFam~=0 then
 		for bag in iterbags, baglist do
 			local bagFree, bagFam = myGetContainerNumFreeSlots(bag)
-			if bagFam~=0 and bit.band(itemFam,bagFam)~=0 then
-				destbag = bag
-				break
+			if bagFam~=0 and band(itemFam,bagFam)~=0 then
+				local slot = putinbag(bag)
+				if slot then
+					return bag,slot
+				end
 			end
 		end
 	end
 	
 	-- If we couldn't put it in a special bag, try normal bags
-	if not destbag then
-		for bag in iterbagsfam0, baglist do
-			if GetContainerNumFreeSlots(bag)>0 then
-				destbag=bag
-				break
+	for bag in iterbagsfam0, baglist do
+		if GetContainerNumFreeSlots(bag)>0 then
+			local slot = putinbag(bag)
+			if slot then
+				return bag,slot
 			end
 		end
 	end
 	
 	
-	-- So.. If we have a destination bag, plop it in a free slot in it!
-	if destbag then
-		for slot=1,GetContainerNumSlots(destbag) do
-			if (not GetContainerItemInfo(destbag,slot)) and (not isLocked(destbag,slot)) then	-- empty!
-				PickupContainerItem(destbag,slot)
-				if not CursorHasItem() then -- success!
-					lockSlot(destbag,slot)
-					return destbag,slot
-				end
-				-- If we get here, something is probably severely broken. But we keep looping hoping for the best.
-				print("Odd. Couldn't place",count or "",itemLink,"in bag",destbag,"slot",slot)
-			end
-		end
-	end
-	
+	-- Set sail on the failboat!
 	if not dontClearOnFail then
 		ClearCursor()
 	end
