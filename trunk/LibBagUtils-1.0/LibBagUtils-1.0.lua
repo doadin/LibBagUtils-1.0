@@ -432,7 +432,7 @@ function lib:FindSmallestStack(where,lookingfor,findLocked)
 	local smbag,smslot
 	for bag,slot in lib:Iterate(where,lookingfor) do
 		local _, itemCount, locked, _, _ = GetContainerItemInfo(bag,slot)
-		if itemCount<smallest and (findLocked or not locked) then
+		if itemCount and itemCount<smallest and (findLocked or not locked) then
 			smbag=bag
 			smslot=slot
 			smallest=itemCount
