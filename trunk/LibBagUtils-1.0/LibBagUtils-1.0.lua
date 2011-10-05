@@ -37,7 +37,7 @@ local GetItemInfo, GetItemFamily = GetItemInfo, GetItemFamily
 -- GLOBALS: DEFAULT_CHAT_FRAME, SELECTED_CHAT_FRAME
 
 local BANK_CONTAINER = BANK_CONTAINER
-local KEYRING_CONTAINER = KEYRING_CONTAINER
+-- local KEYRING_CONTAINER = KEYRING_CONTAINER
 local NUM_BANKBAGSLOTS = NUM_BANKBAGSLOTS
 local NUM_BAG_SLOTS = NUM_BAG_SLOTS
 
@@ -152,12 +152,16 @@ end
 
 
 -----------------------------------------------------------------------
--- Own family/freeslots handling to handle the goddamn keyring that doesn't behave like anything else
+-- Own family/freeslots handling
+-- Pre 4.2: This was to handle the goddamn keyring that doesn't behave like anything else, 
+-- but i'm keeping these functions in in case blizzard adds something new that behaves badly (tabard rack anyone?)
 
 local function GetContainerFamily(bag)
+--[[ pre 4.2
 	if bag==KEYRING_CONTAINER then
 		return 256
 	end
+]]
 	local free,fam = GetContainerNumFreeSlots(bag)
 	return fam
 end
@@ -168,6 +172,7 @@ end
 
 
 local function myGetContainerNumFreeSlots(bag)
+--[[ pre 4.2
 	if bag==KEYRING_CONTAINER then
 		local free=0
 		for slot=1,GetContainerNumSlots(bag) do
@@ -177,6 +182,7 @@ local function myGetContainerNumFreeSlots(bag)
 		end
 		return free,256
 	end
+]]
 	return GetContainerNumFreeSlots(bag)
 end
 
@@ -218,10 +224,10 @@ end
 -- which       - string: "BAGS", "BANK", "BAGSBANK"
 -- itemFamily  - number: bitmasked itemFamily; will accept combinations
 --                       0: will only iterate regular bags
---               nil: will iterate all bags (including keyring, and possibly feature special bags!)
+--               nil: will iterate all bags (including possible future special bags!)
 --
 -- Returns an iterator that can be used in a for loop, e.g.:
---   for bag in LBU:IterateBags("BAGS") do  -- loop all carried bags (including backpack & keyring)
+--   for bag in LBU:IterateBags("BAGS") do  -- loop all carried bags (including backpack & possible future special bags)
 
 local bags = {
 	BAGS = {},
@@ -234,7 +240,7 @@ for i=1,NUM_BAG_SLOTS do
 	bags.BAGS[i]=i
 end
 bags.BAGS[BACKPACK_CONTAINER]=BACKPACK_CONTAINER
-bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
+-- bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
 
 -- Bank bags
 for i=NUM_BAG_SLOTS+1,NUM_BAG_SLOTS+NUM_BANKBAGSLOTS do
