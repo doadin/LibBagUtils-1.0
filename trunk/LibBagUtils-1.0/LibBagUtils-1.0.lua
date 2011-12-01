@@ -485,7 +485,7 @@ function lib:PutItem(where, count, dontClearOnFail)
 
 	local baglist=bags[where]
 	if not baglist then
-		error([[Usage: LibBagUtils:PutItem(where[, dontClearOnFail])]], 2)
+		error("Usage: LibBagUtils:PutItem(where[, count[, dontClearOnFail]])", 2)
 	end
 
 	-- FIRST: if we have a known count, and the item is stackable, we try putting it on top of something else (look for the BIGGEST stack to put it on top of for max packing!)

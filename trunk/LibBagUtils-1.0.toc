@@ -2,7 +2,7 @@
 ## Notes: Bag and item management utilities
 ## Author: Mikk
 ## X-eMail: dpsgnome@mail.com
-## Interface: 40200
+## Interface: 40300
 ## Version: 1.0.@project-revision@
 ## LoadOnDemand: 1
 
