@@ -1,8 +1,7 @@
 ﻿## Title: Lib: BagUtils-1.0
 ## Notes: Bag and item management utilities
 ## Author: Mikk
-## X-eMail: dpsgnome@mail.com
-## Interface: 50400
+## Interface: 60000
 ## Version: 1.0.@project-revision@
 ## LoadOnDemand: 1
 
