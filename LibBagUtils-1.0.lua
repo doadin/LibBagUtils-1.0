@@ -29,6 +29,11 @@ local tconcat = table.concat
 local band=bit.band
 local pairs,select,type,next,tonumber,tostring=pairs,select,type,next,tonumber,tostring
 local GetTime=GetTime
+
+local function IsClassicWow()
+	return WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
+end
+
 local GetContainerNumSlots, GetContainerNumFreeSlots = GetContainerNumSlots, GetContainerNumFreeSlots
 local GetContainerItemLink,GetContainerItemInfo = GetContainerItemLink,GetContainerItemInfo
 local GetItemInfo, GetItemFamily = GetItemInfo, GetItemFamily
