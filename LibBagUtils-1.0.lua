@@ -239,14 +239,14 @@ end
 --   for bag in LBU:IterateBags("BAGS") do  -- loop all carried bags (including backpack & possible future special bags)
 
 local bags = {}
-if IsClassicWow()
+if IsClassicWow() then
 bags = {
 	BAGS = {},
 	BANK = {},
 	BAGSBANK = {},
 }
 end
-if not IsClassicWow()
+if not IsClassicWow() then
 bags = {
 	BAGS = {},
 	BANK = {},
