@@ -45,10 +45,7 @@ local BANK_CONTAINER = BANK_CONTAINER
 -- local KEYRING_CONTAINER = KEYRING_CONTAINER
 local NUM_BANKBAGSLOTS = NUM_BANKBAGSLOTS
 local NUM_BAG_SLOTS = NUM_BAG_SLOTS
-local REAGENTBANK_CONTAINER
-if IsClassicWow() then
-    REAGENTBANK_CONTAINER = REAGENTBANK_CONTAINER
-end
+local REAGENTBANK_CONTAINER = REAGENTBANK_CONTAINER
 
 -- no longer used: lib.frame = lib.frame or CreateFrame("frame", string.gsub(MAJOR,"[^%w]", "_").."_Frame")
 if lib.frame then
@@ -382,9 +379,22 @@ end
 --
 -- Returns true if the given bag is a bank bag
 
-function lib:IsBank(bag)
+function lib:IsBank(bag, incReagentBank)
 	return bag==BANK_CONTAINER or
-		(bag>=NUM_BAG_SLOTS+1 and bag<=NUM_BAG_SLOTS+NUM_BANKBAGSLOTS)
+		(bag>=NUM_BAG_SLOTS+1 and bag<=NUM_BAG_SLOTS+NUM_BANKBAGSLOTS) or (incReagentBank and lib:IsReagentBank(bag))
+end
+
+-----------------------------------------------------------------------	
+-- API :IsReagentBank(bag)	
+--	
+-- bag        - number: bag number	
+--	
+-- Returns true if the given bag is the reagent bank "bag"	
+
+function lib:IsReagentBank(bag)	
+    if not IsClassicWow() then
+	    return IsReagentBankUnlocked() and (bag==REAGENTBANK_CONTAINER and true or nil) or nil
+    end
 end
 
 -----------------------------------------------------------------------
