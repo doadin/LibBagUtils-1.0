@@ -42,7 +42,10 @@ local GetItemInfo, GetItemFamily = GetItemInfo, GetItemFamily
 -- GLOBALS: DEFAULT_CHAT_FRAME, SELECTED_CHAT_FRAME
 
 local BANK_CONTAINER = BANK_CONTAINER
--- local KEYRING_CONTAINER = KEYRING_CONTAINER
+local KEYRING_CONTAINER
+if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
+KEYRING_CONTAINER = KEYRING_CONTAINER
+end
 local NUM_BANKBAGSLOTS = NUM_BANKBAGSLOTS
 local NUM_BAG_SLOTS = NUM_BAG_SLOTS
 local REAGENTBANK_CONTAINER = REAGENTBANK_CONTAINER
@@ -163,11 +166,11 @@ end
 -- but i'm keeping these functions in in case blizzard adds something new that behaves badly (tabard rack anyone?)
 
 local function GetContainerFamily(bag)
---[[ pre 4.2
-	if bag==KEYRING_CONTAINER then
-		return 256
-	end
-]]
+    if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
+    	if bag==KEYRING_CONTAINER then
+    		return 256
+    	end
+    end
 	local free,fam = GetContainerNumFreeSlots(bag)
 	return fam
 end
@@ -178,7 +181,7 @@ end
 
 
 local function myGetContainerNumFreeSlots(bag)
---[[ pre 4.2
+if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
 	if bag==KEYRING_CONTAINER then
 		local free=0
 		for slot=1,GetContainerNumSlots(bag) do
@@ -188,7 +191,7 @@ local function myGetContainerNumFreeSlots(bag)
 		end
 		return free,256
 	end
-]]
+end
 	return GetContainerNumFreeSlots(bag)
 end
 
@@ -257,7 +260,9 @@ for i=1,NUM_BAG_SLOTS do
 	bags.BAGS[i]=i
 end
 bags.BAGS[BACKPACK_CONTAINER]=BACKPACK_CONTAINER
--- bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
+if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
+bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
+end
 
 -- Bank bags
 for i=NUM_BAG_SLOTS+1,NUM_BAG_SLOTS+NUM_BANKBAGSLOTS do
