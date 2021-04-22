@@ -1,4 +1,4 @@
-local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 40 $"):match("%d+"))
+local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 45 $"):match("%d+"))
 local lib = LibStub:NewLibrary(MAJOR,MINOR)
 
 --
