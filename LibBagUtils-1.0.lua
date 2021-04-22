@@ -34,6 +34,14 @@ local function IsClassicWow()
 	return WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 end
 
+local function IsTBCWow()
+	return WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
+end
+
+local function IsRetailWow()
+	return WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+end
+
 local GetContainerNumSlots, GetContainerNumFreeSlots = GetContainerNumSlots, GetContainerNumFreeSlots
 local GetContainerItemLink,GetContainerItemInfo = GetContainerItemLink,GetContainerItemInfo
 local GetItemInfo, GetItemFamily = GetItemInfo, GetItemFamily
@@ -278,7 +286,7 @@ for k,v in pairs(bags.BANK) do
 	bags.BAGSBANK[k]=v
 end
 
-if not IsClassicWow() then
+if IsRetailWow() then
 -- Reagent Bank
 bags.REAGENTBANK[REAGENTBANK_CONTAINER] = REAGENTBANK_CONTAINER
 end
