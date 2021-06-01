@@ -50,7 +50,7 @@ local GetItemInfo, GetItemFamily = GetItemInfo, GetItemFamily
 
 local BANK_CONTAINER = BANK_CONTAINER
 local KEYRING_CONTAINER
-if IsClassicWow() then
+if IsClassicWow() or IsTBCWow()then
 KEYRING_CONTAINER = _G.KEYRING_CONTAINER
 end
 local NUM_BANKBAGSLOTS = NUM_BANKBAGSLOTS
@@ -266,7 +266,7 @@ for i=1,NUM_BAG_SLOTS do
 	bags.BAGS[i]=i
 end
 bags.BAGS[BACKPACK_CONTAINER]=BACKPACK_CONTAINER
-if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
+if IsClassicWoW() or IsTBCWow() then
 bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
 end
 
