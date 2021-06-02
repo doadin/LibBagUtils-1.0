@@ -1,0 +1,22 @@
+language: shell
+os: linux
+dist: focal
+
+jobs:
+  include:
+    - stage: Run luacheck
+      if: tag IS NOT present
+      addons:
+        apt:
+         packages:
+           - luarocks
+      before_install: sudo apt-get update
+      install:
+      - sudo apt-get install curl -y
+      - luarocks install --local luacheck
+      script: /home/travis/.luarocks/bin/luacheck . --no-color -q
+
+notifications:
+ email:
+   on_success: never
+   on_failure: always
