@@ -266,7 +266,7 @@ for i=1,NUM_BAG_SLOTS do
     bags.BAGS[i]=i
 end
 bags.BAGS[BACKPACK_CONTAINER]=BACKPACK_CONTAINER
-if IsClassicWoW() or IsTBCWow() then
+if IsClassicWow() or IsTBCWow() then
 bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
 end
 
@@ -354,7 +354,7 @@ function lib:CountSlots(which, itemFamily)
     end
 
     local free,tot=0,0
-    if not IsClassicWow() and which == "REAGENTBANK" and not IsReagentBankUnlocked() then return free,tot end
+    if IsRetailWow() and which == "REAGENTBANK" and not IsReagentBankUnlocked() then return free,tot end
 
     if not itemFamily then
         for bag in pairs(baglist) do
