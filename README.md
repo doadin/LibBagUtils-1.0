@@ -1,0 +1,1 @@
+[![Build Status](https://travis-ci.com/doadin/LibBagUtils-1.0.svg?branch=master)](https://travis-ci.com/doadin/LibBagUtils-1.0)
