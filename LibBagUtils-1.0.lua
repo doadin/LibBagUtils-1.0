@@ -491,7 +491,13 @@ function lib:Find(where,lookingfor,findLocked) --luacheck: ignore 212
     if IsRetailWow() and where == "REAGENTBANK" and not IsReagentBankUnlocked() then return nil end
 
     for bag,slot,link in lib:Iterate(where,lookingfor) do
-        local _, _, locked, _, _ = GetContainerItemInfo(bag,slot)
+        local locked
+        if IsRetailWow() then
+            local itemInfo = GetContainerItemInfo(bag, slot)
+            locked = itemInfo and itemInfo.isLocked
+        else
+            locked = select(3, GetContainerItemInfo(bag, slot))
+        end
         if findLocked or not locked then
             return bag,slot,link
         end
@@ -514,7 +520,16 @@ function lib:FindSmallestStack(where,lookingfor,findLocked) --luacheck: ignore 2
     local smallest=9e9
     local smbag,smslot
     for bag,slot in lib:Iterate(where,lookingfor) do
-        local _, itemCount, locked, _, _ = GetContainerItemInfo(bag,slot)
+        local locked
+        local itemCount
+        if IsRetailWow() then
+            local itemInfo = GetContainerItemInfo(bag, slot)
+            locked = itemInfo and itemInfo.isLocked
+            itemCount = itemInfo and itemInfo.stackCount
+        else
+            locked = select(3, GetContainerItemInfo(bag, slot))
+            itemCount = select(2, GetContainerItemInfo(bag, slot))
+        end
         if itemCount and itemCount<smallest and (findLocked or not locked) then
             smbag=bag
             smslot=slot
@@ -574,7 +589,15 @@ function lib:PutItem(where, count, dontClearOnFail) --luacheck: ignore 212
         if itemStackCount>1 and count<itemStackCount then
             local bestsize,bestbag,bestslot=0,0,0
             for bag,slot in lib:Iterate(where, itemId) do -- Only look for itemId, not the full string; we assume everything of the same itemId is stackable. Looking at the full itemstring is futile since everything has unique IDs these days.
-                local _, ciCount, ciLocked, _, _ = GetContainerItemInfo(bag,slot)
+                local _, ciCount, ciLocked
+                if Baggins:IsRetailWow() then
+                    local itemInfo = GetContainerItemInfo(bag, slot)
+                    ciLocked = itemInfo and itemInfo.isLocked
+                    ciCount = itemInfo and itemInfo.stackCount
+                else
+                    ciLocked = select(3, GetContainerItemInfo(bag, slot))
+                    ciCount = select(2, GetContainerItemInfo(bag, slot))
+                end
                 if ciCount+count<=itemStackCount and ciCount>bestsize and not ciLocked and not isLocked(bag,slot)then
                     bestsize=ciCount
                     bestbag=bag
