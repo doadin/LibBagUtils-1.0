@@ -1,4 +1,4 @@
-local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 50 $"):match("%d+"))
+local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 60 $"):match("%d+"))
 local LibStub = _G.LibStub
 local lib = LibStub:NewLibrary(MAJOR,MINOR)
 
@@ -34,10 +34,13 @@ local GetTime=_G.GetTime
 local WOW_PROJECT_ID = _G.WOW_PROJECT_ID
 local WOW_PROJECT_CLASSIC = _G.WOW_PROJECT_CLASSIC
 local WOW_PROJECT_BURNING_CRUSADE_CLASSIC = _G.WOW_PROJECT_BURNING_CRUSADE_CLASSIC
+local WOW_PROJECT_WRATH_CLASSIC = _G.WOW_PROJECT_WRATH_CLASSIC
+local WOW_PROJECT_CATACLYSM_CLASSIC = _G.WOW_PROJECT_CATACLYSM_CLASSIC
 local WOW_PROJECT_MAINLINE = _G.WOW_PROJECT_MAINLINE
 local LE_EXPANSION_LEVEL_CURRENT = _G.LE_EXPANSION_LEVEL_CURRENT
 local LE_EXPANSION_BURNING_CRUSADE =_G.LE_EXPANSION_BURNING_CRUSADE
 local LE_EXPANSION_WRATH_OF_THE_LICH_KING = _G.LE_EXPANSION_WRATH_OF_THE_LICH_KING
+local LE_EXPANSION_CATACLYSM = _G.LE_EXPANSION_CATACLYSM
 local GetContainerNumSlots = _G.C_Container and _G.C_Container.GetContainerNumSlots or _G.GetContainerNumSlots
 local GetContainerNumFreeSlots = _G.C_Container and _G.C_Container.GetContainerNumFreeSlots or _G.GetContainerNumFreeSlots
 local GetContainerItemLink = _G.C_Container and _G.C_Container.GetContainerItemLink or _G.GetContainerItemLink
@@ -66,6 +69,10 @@ local function IsWrathWow() --luacheck: ignore 212
     return WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC and LE_EXPANSION_LEVEL_CURRENT == LE_EXPANSION_WRATH_OF_THE_LICH_KING
 end
 
+local function IsCataWow() --luacheck: ignore 212
+    return WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC and LE_EXPANSION_LEVEL_CURRENT == LE_EXPANSION_CATACLYSM
+end
+
 local function IsRetailWow() --luacheck: ignore 212
     return WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
 end
@@ -77,7 +84,7 @@ end
 
 local BACKPACK_CONTAINER = _G.BACKPACK_CONTAINER
 local KEYRING_CONTAINER
-if IsClassicWow() or IsTBCWow() or IsWrathWow() then
+if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() then
 KEYRING_CONTAINER = _G.KEYRING_CONTAINER
 end
 
@@ -202,7 +209,7 @@ end
 -- but i'm keeping these functions in in case blizzard adds something new that behaves badly (tabard rack anyone?)
 
 local function GetContainerFamily(bag)
-    if IsClassicWow() or IsTBCWow() then
+    if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() then
         if bag==KEYRING_CONTAINER then
             return 256
         end
@@ -217,7 +224,7 @@ end
 
 
 local function myGetContainerNumFreeSlots(bag)
-if IsClassicWow() or IsTBCWow() then
+if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() then
     if bag==KEYRING_CONTAINER then
         local free=0
         for slot=1,GetContainerNumSlots(bag) do
@@ -275,7 +282,7 @@ end
 --   for bag in LBU:IterateBags("BAGS") do  -- loop all carried bags (including backpack & possible future special bags)
 
 local bags = {}
-if IsClassicWow() or IsTBCWow() or IsWrathWow() then
+if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() then
 bags = {
     BAGS = {},
     BANK = {},
