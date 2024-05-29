@@ -1,4 +1,4 @@
-local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 60 $"):match("%d+"))
+local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 61 $"):match("%d+"))
 local LibStub = _G.LibStub
 local lib = LibStub:NewLibrary(MAJOR,MINOR)
 
@@ -84,15 +84,17 @@ end
 
 local BACKPACK_CONTAINER = _G.BACKPACK_CONTAINER
 local KEYRING_CONTAINER
-if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() then
-KEYRING_CONTAINER = _G.KEYRING_CONTAINER
+if IsClassicWow() or IsTBCWow() or IsWrathWow() then
+    KEYRING_CONTAINER = Enum.BagIndex.Keyring
 end
 
 local REAGENTBANK_CONTAINER
+local REAGENT_CONTAINER
 local IsReagentBankUnlocked
 if IsRetailWow() then
-REAGENTBANK_CONTAINER = _G.REAGENTBANK_CONTAINER
-IsReagentBankUnlocked = _G.IsReagentBankUnlocked
+    REAGENTBANK_CONTAINER = _G.REAGENTBANK_CONTAINER
+    REAGENT_CONTAINER = IsRetailWow() and Enum.BagIndex.ReagentBag or math.huge
+    IsReagentBankUnlocked = _G.IsReagentBankUnlocked
 end
 
 
@@ -209,7 +211,7 @@ end
 -- but i'm keeping these functions in in case blizzard adds something new that behaves badly (tabard rack anyone?)
 
 local function GetContainerFamily(bag)
-    if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() then
+    if IsClassicWow() or IsTBCWow() or IsWrathWow() then
         if bag==KEYRING_CONTAINER then
             return 256
         end
@@ -224,7 +226,7 @@ end
 
 
 local function myGetContainerNumFreeSlots(bag)
-if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() then
+if IsClassicWow() or IsTBCWow() or IsWrathWow() then
     if bag==KEYRING_CONTAINER then
         local free=0
         for slot=1,GetContainerNumSlots(bag) do
@@ -304,7 +306,7 @@ for i=1,NUM_BAG_SLOTS do
 end
 bags.BAGS[BACKPACK_CONTAINER]=BACKPACK_CONTAINER
 if IsClassicWow() or IsTBCWow() or IsWrathWow() then
-bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
+    bags.BAGS[KEYRING_CONTAINER]=KEYRING_CONTAINER
 end
 
 -- Bank bags
