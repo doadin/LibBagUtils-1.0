@@ -1,4 +1,4 @@
-local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 64 $"):match("%d+"))
+local MAJOR,MINOR = "LibBagUtils-1.0", tonumber(("$Revision: 65 $"):match("%d+"))
 local LibStub = _G.LibStub
 local lib = LibStub:NewLibrary(MAJOR,MINOR)
 
@@ -49,7 +49,7 @@ local GetContainerItemLink = _G.C_Container and _G.C_Container.GetContainerItemL
 local GetContainerItemInfo = _G.C_Container and _G.C_Container.GetContainerItemInfo or _G.GetContainerItemInfo
 local GetItemInfo = _G.C_Item and _G.C_Item.GetItemInfo or _G.GetItemInfo
 local GetItemFamily = _G.C_Item and _G.C_Item.GetItemFamily or _G.GetItemFamily
-local NUM_BANKBAGSLOTS = _G.NUM_BANKBAGSLOTS
+local NUM_BANKBAGSLOTS = _G.NUM_BANKBAGSLOTS or 7
 local NUM_BAG_SLOTS = _G.NUM_TOTAL_EQUIPPED_BAG_SLOTS or _G.NUM_BAG_SLOTS
 local PickupContainerItem = _G.PickupContainerItem
 local CursorHasItem = _G.CursorHasItem
@@ -57,7 +57,7 @@ local GetCursorInfo = _G.GetCursorInfo
 local ClearCursor = _G.ClearCursor
 local geterrorhandler = _G.geterrorhandler
 
-local BANK_CONTAINER = _G.BANK_CONTAINER
+local BANK_CONTAINER = _G.BANK_CONTAINER or 2
 
 local function IsClassicWow() --luacheck: ignore 212
     return WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
@@ -98,9 +98,9 @@ local REAGENTBANK_CONTAINER
 local REAGENT_CONTAINER
 local IsReagentBankUnlocked
 if IsRetailWow() then
-    REAGENTBANK_CONTAINER = _G.REAGENTBANK_CONTAINER
+    REAGENTBANK_CONTAINER = _G.REAGENTBANK_CONTAINER or -3
     REAGENT_CONTAINER = IsRetailWow() and Enum.BagIndex.ReagentBag or math.huge
-    IsReagentBankUnlocked = _G.IsReagentBankUnlocked
+    IsReagentBankUnlocked = true
 end
 
 
@@ -362,7 +362,7 @@ function lib:IterateBags(which, itemFamily) --luacheck: ignore 212
         error([[Usage: LibBagUtils:IterateBags("which"[, itemFamily])]], 2)
     end
 
-    if IsRetailWow() and which == "REAGENTBANK" and not IsReagentBankUnlocked() then return function() end, baglist end
+    if IsRetailWow() and which == "REAGENTBANK" and not true then return function() end, baglist end
 
     if not itemFamily then
         return iterbags, baglist
@@ -399,7 +399,7 @@ function lib:CountSlots(which, itemFamily) --luacheck: ignore 212
     end
 
     local free,tot=0,0
-    if IsRetailWow() and which == "REAGENTBANK" and not IsReagentBankUnlocked() then return free,tot end
+    if IsRetailWow() and which == "REAGENTBANK" and not true then return free,tot end
 
     if not itemFamily then
         for bag in pairs(baglist) do
@@ -444,7 +444,7 @@ end
 
 function lib:IsReagentBank(bag) --luacheck: ignore 212
     if IsRetailWow() then
-        return IsReagentBankUnlocked() and (bag==REAGENTBANK_CONTAINER and true or nil) or nil
+        return true and (bag==REAGENTBANK_CONTAINER and true or nil) or nil
     end
 end
 
@@ -458,7 +458,7 @@ end
 --   for bag,slot,link in LBU:Iterate("BAGSBANK", 29434) do  -- find all badges of justice
 
 function lib:Iterate(which, lookingfor) --luacheck: ignore 212
-    if IsRetailWow() and which == "REAGENTBANK" and not IsReagentBankUnlocked() then return function() end end
+    if IsRetailWow() and which == "REAGENTBANK" and not true then return function() end end
 
     local baglist=bags[which]
     if not baglist then
@@ -503,7 +503,7 @@ end
 -- Returns:  bag,slot,link    or nil on failure
 
 function lib:Find(where,lookingfor,findLocked) --luacheck: ignore 212
-    if IsRetailWow() and where == "REAGENTBANK" and not IsReagentBankUnlocked() then return nil end
+    if IsRetailWow() and where == "REAGENTBANK" and not true then return nil end
 
     for bag,slot,link in lib:Iterate(where,lookingfor) do
         local locked
@@ -530,7 +530,7 @@ end
 -- Returns:  bag,slot,size    or nil on failure
 
 function lib:FindSmallestStack(where,lookingfor,findLocked) --luacheck: ignore 212
-    if IsRetailWow() and where == "REAGENTBANK" and not IsReagentBankUnlocked() then return nil end
+    if IsRetailWow() and where == "REAGENTBANK" and not true then return nil end
 
     local smallest=9e9
     local smbag,smslot
@@ -585,7 +585,7 @@ local function putinbag(destbag)
 end
 
 function lib:PutItem(where, count, dontClearOnFail) --luacheck: ignore 212
-    if IsRetailWow() and where == "REAGENTBANK" and not IsReagentBankUnlocked() then return nil end
+    if IsRetailWow() and where == "REAGENTBANK" and not true then return nil end
 
     local cursorType,itemId,itemLink = GetCursorInfo()
     if cursorType~="item" then
