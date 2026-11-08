@@ -83,6 +83,9 @@ local function IsRetailWow() --luacheck: ignore 212
     return WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
 end
 
+local function IsForeverWow()
+    return WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
+end
 
 -- GLOBALS: error, geterrorhandler, PickupContainerItem
 -- GLOBALS: CursorHasItem, ClearCursor, GetCursorInfo
@@ -290,7 +293,7 @@ end
 --   for bag in LBU:IterateBags("BAGS") do  -- loop all carried bags (including backpack & possible future special bags)
 
 local bags = {}
-if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() or IsMistsWow() then
+if IsClassicWow() or IsTBCWow() or IsWrathWow() or IsCataWow() or IsMistsWow() or IsForeverWow() then
 bags = {
     BAGS = {},
     BANK = {},
